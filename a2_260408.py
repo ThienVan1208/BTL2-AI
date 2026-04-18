@@ -263,6 +263,7 @@ def count_X(board):
     return count
 
 def main2(first = 'X'):
+    from Debug.sol_minimax import move
     board = init_board()
     count = 0
     limit = 100
@@ -274,7 +275,7 @@ def main2(first = 'X'):
     while(True):
         count = count + 1
         # print(count)
-        # print_board(board)
+        print_board(board)
         if(count > limit):
             X_pieces = count_X(board)
             if X_pieces > 8:
@@ -285,14 +286,19 @@ def main2(first = 'X'):
             else:
                 print("So nuoc di ca van vuot 100, va so quan co cua ban = 8")
                 return 0
-        #b_copy = copy_board(board)
+        b_copy = copy_board(board)
         if player == -1:
             chose_move = npc_move(board, player, mo)
         else:
             t = time.time()
-            #chose_move = move(b_copy, player)
-            chose_move = npc_move(board, player, mo)
+
+            """
+            CALL MOVE HERE
+            """
+            chose_move = move(b_copy, player, remain_time=99)
+            
             e = time.time() - t
+            print('-> AI Của Bạn đánh nước: ' + str(chose_move) + ' | Nghĩ khoảng: ' + str(round(e, 3)) + 's')
             if e > 3.2:
                 print("Thoi gian xu ly vuot 3.2 giay")
                 return -1
@@ -343,7 +349,8 @@ def test():
                 
                 
                 
-# print(main2())          
+if __name__ == '__main__':
+    print(main2())
                 
                 
             
