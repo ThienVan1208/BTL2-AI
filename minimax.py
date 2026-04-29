@@ -55,7 +55,8 @@ def minimax_search(board, depth, alpha, beta, maximizing_player, player, start_t
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
-                
+            
+            # Apply alpha-beta pruning
             alpha = max(alpha, eval_score)
             if beta <= alpha:
                 break

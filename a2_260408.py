@@ -300,6 +300,7 @@ def main2(first = 'X'):
 
             e = time.time() - t
             print('-> AI Của Bạn đánh nước: ' + str(chose_move) + ' | Nghĩ khoảng: ' + str(round(e, 3)) + 's')
+            
             if e > 3.2:
                 print("Thoi gian xu ly vuot 3.2 giay")
                 return -1
