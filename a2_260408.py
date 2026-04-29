@@ -263,7 +263,7 @@ def count_X(board):
     return count
 
 def main2(first = 'X'):
-    from Debug.sol_minimax import move
+    from minimax import move
     board = init_board()
     count = 0
     limit = 100
@@ -296,7 +296,8 @@ def main2(first = 'X'):
             CALL MOVE HERE
             """
             chose_move = move(b_copy, player, remain_time=99)
-            
+            #################################################
+
             e = time.time() - t
             print('-> AI Của Bạn đánh nước: ' + str(chose_move) + ' | Nghĩ khoảng: ' + str(round(e, 3)) + 's')
             if e > 3.2:
