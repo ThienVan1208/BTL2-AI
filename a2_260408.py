@@ -413,19 +413,65 @@ def evaluate_board(board, player):
 # --- MINIMAX MERGED ---
 
 
-import sys
+_last_board = None
+_last_move = None
 
-def get_real_mo():
-    # Get the 'mo' variable from the call stack of Python to determine if opponent has set a forced move
-    try:
-        frame = sys._getframe(1)
-        while frame:
-            if 'mo' in frame.f_locals and isinstance(frame.f_locals['mo'], list):
-                return frame.f_locals['mo']
-            frame = frame.f_back
-    except Exception:
-        pass
-    return []
+def get_mo_from_state(current_board, player):
+    """
+    Deduce forced moves ('mo') by comparing the current board with the board from our last turn.
+    This avoids using sys._getframe hack and is completely safe and robust.
+    """
+    global _last_board, _last_move
+    
+    # If this is the first turn or state was reset, there's no history to infer from
+    if _last_board is None or _last_move is None:
+        return []
+        
+    # Simulate our last move on the last board to get the state right before opponent's move
+    intermediate_board = copy_board(_last_board)
+    act_moves(_last_move, player, intermediate_board)
+    
+    empty_to_occ = 0
+    occ_to_empty = 0
+    opp_start = None
+    
+    # Compare intermediate board with current board to find exactly where opponent moved from
+    for i in range(5):
+        for j in range(5):
+            if intermediate_board[i][j] == 0 and current_board[i][j] != 0:
+                empty_to_occ += 1
+            elif intermediate_board[i][j] != 0 and current_board[i][j] == 0:
+                occ_to_empty += 1
+                opp_start = (i, j)
+                
+    # If empty cell count change is not exactly 1, the board was reset (e.g. a new game started)
+    if empty_to_occ != 1 or occ_to_empty != 1:
+        _last_board = None
+        _last_move = None
+        return []
+        
+    # Count our pieces before and after opponent's move
+    my_pieces_before = sum(1 for row in intermediate_board for cell in row if cell == player)
+    my_pieces_after = sum(1 for row in current_board for cell in row if cell == player)
+    
+    # If opponent captured any of our pieces (Ganh or Chet), the rules state there is no 'mo' trap
+    if my_pieces_after < my_pieces_before:
+        return []
+        
+    mo = []
+    my_moves = get_valid_moves(current_board, player)
+    for m in my_moves:
+        # A trap move MUST end at the exact spot the opponent just vacated
+        if m[1] == opp_start: 
+            board_temp = copy_board(current_board)
+            board_temp[m[0][0]][m[0][1]] = 0
+            board_temp[m[1][0]][m[1][1]] = player
+            
+            # Check if this move actually results in a Ganh
+            if len(ganh(board_temp, m[1][0], m[1][1], -player)) > 0:
+                mo.append(m)
+                
+    return mo
 
 def minimax_search(board, depth, alpha, beta, maximizing_player, player, start_time, time_limit, forced_moves=None):
     if time.time() - start_time > time_limit:
@@ -492,11 +538,13 @@ def minimax_search(board, depth, alpha, beta, maximizing_player, player, start_t
         return min_eval, best_move, time_out
 
 def move(board, player, remain_time):
+    global _last_board, _last_move
+    
     start_time = time.time()
     time_limit = min(remain_time, 2.7) 
     
-    # Check mo implicitly using the board state itself
-    implicit_mo = get_real_mo()
+    # Check mo implicitly using state tracking instead of call stack
+    implicit_mo = get_mo_from_state(board, player)
     
     best_move_overall = None
     
@@ -527,6 +575,10 @@ def move(board, player, remain_time):
         if valid_moves:
             best_move_overall = valid_moves[0]
             
+    # Save the current state for the next turn to infer opponent's move
+    _last_board = copy_board(board)
+    _last_move = best_move_overall
+    
     return best_move_overall
 
 # ==================================================
