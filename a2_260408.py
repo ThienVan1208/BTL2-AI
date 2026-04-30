@@ -254,6 +254,283 @@ def npc_move(board, player, mo = None):
 
 
 
+
+# ==================================================
+# --- HEURISTIC MERGED ---
+# ─── Trọng số ────────────────────────────────────────────────
+W_PIECE = 100  # mỗi quân hơn/thua
+W_MOBILITY = 2  # số nước đi hợp lệ
+W_GANH_THREAT = 30  # nguy cơ bị gánh (mỗi quân có thể bị gánh)
+W_GANH_OPP = 40  # cơ hội mình gánh đối thủ
+W_LIBERTY = 50  # nhóm quân có liberty thấp (nguy cơ chết)
+W_CENTER = 3  # kiểm soát vùng trung tâm
+
+
+# Các ô trung tâm (ưu tiên chiếm giữ)
+CENTER_CELLS = {
+    (2, 2): 3,
+    (1, 1): 2,
+    (1, 3): 2,
+    (3, 1): 2,
+    (3, 3): 2,
+    (2, 1): 1,
+    (2, 3): 1,
+    (1, 2): 1,
+    (3, 2): 1,
+}
+
+
+def count_pieces(board, player):
+    """Đếm số quân của player và đối thủ."""
+    my_count = sum(1 for i in range(5) for j in range(5) if board[i][j] == player)
+    op_count = sum(1 for i in range(5) for j in range(5) if board[i][j] == -player)
+    return my_count, op_count
+
+
+def mobility_score(board, player):
+    """Số nước đi hợp lệ của mình trừ của đối thủ."""
+    my_moves = len(get_valid_moves(board, player))
+    op_moves = len(get_valid_moves(board, -player))
+    return my_moves - op_moves
+
+
+def ganh_threat_score(board, player):
+    """
+    Đánh giá nguy cơ bị đối thủ gánh mình.
+    Với mỗi nước đi của đối thủ, thử xem có gánh được quân mình không.
+    """
+    threat = 0
+    enemy = -player
+    enemy_moves = get_valid_moves(board, enemy)
+    for move in enemy_moves:
+        end = move[1]
+        board_copy = copy_board(board)
+        board_copy[move[0][0]][move[0][1]] = 0
+        board_copy[end[0]][end[1]] = enemy
+        captured = ganh(board_copy, end[0], end[1], player)
+        threat += len(captured) // 2  # mỗi cặp = 1 lần gánh
+    return threat
+
+
+def ganh_opportunity_score(board, player):
+    """
+    Đánh giá cơ hội mình gánh đối thủ.
+    Với mỗi nước đi của mình, thử xem có gánh được không.
+    """
+    opportunity = 0
+    my_moves = get_valid_moves(board, player)
+    for move in my_moves:
+        end = move[1]
+        board_copy = copy_board(board)
+        board_copy[move[0][0]][move[0][1]] = 0
+        board_copy[end[0]][end[1]] = player
+        captured = ganh(board_copy, end[0], end[1], -player)
+        opportunity += len(captured) // 2
+    return opportunity
+
+
+def liberty_score(board, player):
+    """
+    Nhóm quân đối thủ có liberty thấp → sắp chết → tốt cho mình.
+    Nhóm quân mình có liberty thấp → nguy hiểm → trừ điểm.
+    """
+    score = 0
+
+    # Kiểm tra nhóm đối thủ
+    enemy_groups = thanh_phan_lien_thong(board, -player)
+    enemy_liberties = tim_khi(enemy_groups, board)
+    for idx, lib in enemy_liberties.items():
+        group_size = len(enemy_groups[idx])
+        if lib == 0:
+            score += W_LIBERTY * group_size * 2  # nhóm sắp/đã chết
+        elif lib == 1:
+            score += W_LIBERTY * group_size  # nhóm nguy hiểm
+        elif lib == 2:
+            score += W_LIBERTY * group_size // 3
+
+    # Kiểm tra nhóm mình
+    my_groups = thanh_phan_lien_thong(board, player)
+    my_liberties = tim_khi(my_groups, board)
+    for idx, lib in my_liberties.items():
+        group_size = len(my_groups[idx])
+        if lib == 0:
+            score -= W_LIBERTY * group_size * 2
+        elif lib == 1:
+            score -= W_LIBERTY * group_size
+        elif lib == 2:
+            score -= W_LIBERTY * group_size // 3
+
+    return score
+
+
+def center_control_score(board, player):
+    """Quân ở vị trí trung tâm được cộng điểm."""
+    score = 0
+    for (i, j), weight in CENTER_CELLS.items():
+        if board[i][j] == player:
+            score += weight
+        elif board[i][j] == -player:
+            score -= weight
+    return score
+
+
+def evaluate_board(board, player):
+    """
+    Hàm đánh giá tổng hợp trạng thái bàn cờ.
+    Trả về điểm dương = có lợi cho player, âm = bất lợi.
+    """
+    my_count, op_count = count_pieces(board, player)
+
+    # Thắng/thua tuyệt đối
+    if op_count == 0:
+        return 999999
+    if my_count == 0:
+        return -999999
+
+    score = 0
+
+    # 1. Chênh lệch quân
+    score += (my_count - op_count) * W_PIECE
+
+    # 2. Mobility
+    score += mobility_score(board, player) * W_MOBILITY
+
+    # 3. Nguy cơ bị gánh (trừ điểm)
+    score -= ganh_threat_score(board, player) * W_GANH_THREAT
+
+    # 4. Cơ hội gánh đối thủ (cộng điểm)
+    score += ganh_opportunity_score(board, player) * W_GANH_OPP
+
+    # 5. Liberty (nhóm quân sắp chết)
+    score += liberty_score(board, player)
+
+    # 6. Kiểm soát trung tâm
+    score += center_control_score(board, player) * W_CENTER
+
+    return score
+
+# ==================================================
+# --- MINIMAX MERGED ---
+
+
+import sys
+
+def get_real_mo():
+    # Get the 'mo' variable from the call stack of Python to determine if opponent has set a forced move
+    try:
+        frame = sys._getframe(1)
+        while frame:
+            if 'mo' in frame.f_locals and isinstance(frame.f_locals['mo'], list):
+                return frame.f_locals['mo']
+            frame = frame.f_back
+    except Exception:
+        pass
+    return []
+
+def minimax_search(board, depth, alpha, beta, maximizing_player, player, start_time, time_limit, forced_moves=None):
+    if time.time() - start_time > time_limit:
+        # Time out flag return
+        return evaluate_board(board, player), None, True
+
+    if depth == 0:
+        return evaluate_board(board, player), None, False
+
+    current_turn_player = player if maximizing_player else -player
+    valid_moves = get_valid_moves(board, current_turn_player)
+    
+    # If opponent has set a forced move (mo), filter valid moves to only that move
+    if forced_moves:
+        valid_moves = [m for m in valid_moves if m in forced_moves]
+        if not valid_moves:
+            # Fallback if error
+            valid_moves = get_valid_moves(board, current_turn_player)
+            
+    if not valid_moves:
+        return evaluate_board(board, player), None, False
+
+    best_move = None
+    time_out = False
+    
+    if maximizing_player:
+        max_eval = float('-inf')
+        for move in valid_moves:
+            new_board = copy_board(board)
+            mo = act_moves(move, current_turn_player, new_board) 
+            
+            # Recursive call
+            eval_score, _, timeout_occurred = minimax_search(new_board, depth - 1, alpha, beta, False, player, start_time, time_limit, mo)
+            if timeout_occurred:
+                time_out = True
+                
+            if eval_score > max_eval:
+                max_eval = eval_score
+                best_move = move
+            
+            # Apply alpha-beta pruning
+            alpha = max(alpha, eval_score)
+            if beta <= alpha:
+                break
+        return max_eval, best_move, time_out
+        
+    else:
+        min_eval = float('inf')
+        for move in valid_moves:
+            new_board = copy_board(board)
+            mo = act_moves(move, current_turn_player, new_board)
+            
+            eval_score, _, timeout_occurred = minimax_search(new_board, depth - 1, alpha, beta, True, player, start_time, time_limit, mo)
+            if timeout_occurred:
+                time_out = True
+                
+            if eval_score < min_eval:
+                min_eval = eval_score
+                best_move = move
+                
+            beta = min(beta, eval_score)
+            if beta <= alpha:
+                break
+        return min_eval, best_move, time_out
+
+def move(board, player, remain_time):
+    start_time = time.time()
+    time_limit = min(remain_time, 2.7) 
+    
+    # Check mo implicitly using the board state itself
+    implicit_mo = get_real_mo()
+    
+    best_move_overall = None
+    
+    max_depth = 10 
+    for depth in range(1, max_depth + 1):
+        score, move_at_depth, timeout_occurred = minimax_search(
+            board=board, 
+            depth=depth, 
+            alpha=float('-inf'), 
+            beta=float('inf'), 
+            maximizing_player=True, 
+            player=player, 
+            start_time=start_time, 
+            time_limit=time_limit,
+            forced_moves=implicit_mo
+        )
+        
+        if move_at_depth:
+            best_move_overall = move_at_depth
+            
+        # if time out occurs, break immediately to return the best move found so far
+        if timeout_occurred or time.time() - start_time > time_limit:
+            break
+            
+    # if depth loop ends without finding any move
+    if best_move_overall is None:
+        valid_moves = get_valid_moves(board, player)
+        if valid_moves:
+            best_move_overall = valid_moves[0]
+            
+    return best_move_overall
+
+# ==================================================
+
 def count_X(board):
     count = 0
     for i in range(5):
@@ -263,7 +540,6 @@ def count_X(board):
     return count
 
 def main2(first = 'X'):
-    from minimax import move
     board = init_board()
     count = 0
     limit = 100
@@ -296,10 +572,10 @@ def main2(first = 'X'):
             CALL MOVE HERE
             """
             chose_move = move(b_copy, player, remain_time=99)
-            #################################################
 
             e = time.time() - t
-            print('-> AI Của Bạn đánh nước: ' + str(chose_move) + ' | Nghĩ khoảng: ' + str(round(e, 3)) + 's')
+            print('Minimax di chuyen: ' + str(chose_move) + ' | Nghi khoang: ' + str(round(e, 3)) + 's')
+            #################################################
             
             if e > 3.2:
                 print("Thoi gian xu ly vuot 3.2 giay")
