@@ -387,6 +387,18 @@ def evaluate_board(board, player):
     if my_count == 0:
         return -999999
 
+    # Check the moves of 2 players
+    my_moves = get_valid_moves(board, player)
+    op_moves = get_valid_moves(board, -player)
+    my_moves_count = len(my_moves)
+    op_moves_count = len(op_moves)
+    
+    # Win condition by trapping opponent (no valid moves)
+    if op_moves_count == 0:
+        return 999999
+    if my_moves_count == 0:
+        return -999999
+
     score = 0
 
     # 1. Chênh lệch quân

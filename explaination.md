@@ -28,10 +28,11 @@ CONVENTION:
 
 Minimax with Alpha-Beta Pruning idea:
 - Use the Minimax algorithm to explore possible future board states up to a certain depth.
+- **Iterative Deepening**: The algorithm gradually increases the search depth (from 1 to 10). If the time limit is reached during a search, it safely aborts and returns the best move found in the previous completed depth.
 - Alpha-Beta Pruning is used to cut off branches in the game tree that don't need to be evaluated (because a better move has already been found), dramatically reducing execution time (required to be under 3 seconds per move).
 - At maximum depth or when evaluating leaf nodes, a heuristic function calculates the score based on piece advantage, mobility, and board control.
 - Time control mechanism: Ensure `time.time() - start_time` is strictly checked during the recursive steps to avoid time-out penalties.
-- Forced Move checking: In the root call (or throughout tree), we must check if `get_real_mo()` returns forced moves. If it does, we can only explore those specific branches.
+- Forced Move checking: In the root call (or throughout tree), we must check if `get_mo_from_state()` returns forced moves. If it does, we can only explore those specific branches.
 
 - Pseudo code:
 ```python
