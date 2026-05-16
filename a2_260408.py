@@ -228,7 +228,7 @@ def npc_move(board, player, mo = None):
     moves = get_valid_moves(board, player)
     if len(moves) == 0:
         return None
-    if len(mo) > 0:
+    if mo is not None and len(mo) > 0:
         for move in moves:
             if move in mo:
                 return move
@@ -256,7 +256,7 @@ def npc_move(board, player, mo = None):
 
 
 # ==================================================
-# --- HEURISTIC MERGED ---
+# --- HEURISTIC ---
 # ─── Trọng số ────────────────────────────────────────────────
 W_PIECE = 100  # mỗi quân hơn/thua
 W_MOBILITY = 2  # số nước đi hợp lệ
@@ -421,18 +421,13 @@ def evaluate_board(board, player):
 
     return score
 
+
 # ==================================================
-# --- MINIMAX MERGED ---
-
-
+# --- MINIMAX ---
 _last_board = None
 _last_move = None
 
 def get_mo_from_state(current_board, player):
-    """
-    Deduce forced moves ('mo') by comparing the current board with the board from our last turn.
-    This avoids using sys._getframe hack and is completely safe and robust.
-    """
     global _last_board, _last_move
     
     # If this is the first turn or state was reset, there's no history to infer from
@@ -555,7 +550,6 @@ def move(board, player, remain_time):
     start_time = time.time()
     time_limit = min(remain_time, 2.7) 
     
-    # Check mo implicitly using state tracking instead of call stack
     implicit_mo = get_mo_from_state(board, player)
     
     best_move_overall = None
